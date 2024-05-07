@@ -18,16 +18,25 @@ class Player:
         self.x += self.dx
 
         while self.collision():
-            self.x -= self.dx
+            self.x += 1 if self.dx < 0 else -1
 
         if self.airborne:
             self.fall()
 
-        self.collision_box.bottomleft = self.x, self.y
+        self.y += 1
+        if self.collision():
+            self.y -= 1
+        else:
+            self.airborne = True
+
+        self.collision_box.topleft = self.x, self.y
 
     def jump(self):
-        self.airborne = True
-        self.dy = -10
+        self.y += 5
+        if self.collision():
+            self.airborne = True
+            self.dy = -12
+        self.y -= 5
 
     def fall(self):
         self.y += self.dy
@@ -46,15 +55,15 @@ class Player:
             self.dy = 0
 
     def collision(self):
-        self.collision_box.bottomleft = self.x, self.y
-        for y in range(int(self.y / 25 - 1), int(self.y / 25 + 1)):
-            for x in range(int(self.x / 25 - 1), int(self.x / 25 + 1)):
-                collide = self.collision_box.colliderect((x * 25, y * 25, 25, 25))
-                try:
-                    if collide and self.level_map[y][x] == 1:
+        self.collision_box.topleft = self.x, self.y
+        for y in range(int(self.y / 25), int(self.y / 25 + 3)):
+            for x in range(int(self.x / 25), int(self.x / 25 + 3)):
+                collide = self.collision_box.colliderect(pygame.Rect(x * 25, y * 25, 25, 25))
+                if collide:
+                    if ((self.level_map[y][x] == 1) or
+                            (self.level_map[y][x] == 2 and self.dy >= 0)):
+
                         return True
-                except IndexError:
-                    pass
         return False
 
 
@@ -73,13 +82,18 @@ class Level:
     '''
     0 = Empty Space
     1 = Wall
+    2 = Platform
     '''
     def draw_level(self):
         image = pygame.Surface((750, 500))
         pygame.draw.rect(image, 'white', (0, 0, 750, 500))
         for y, line in enumerate(self.level_map):
             for x, tile in enumerate(line):
+                colour = 'white'
                 if tile == 1:
-                    pygame.draw.rect(image, 'black', (x*25, y*25, 25, 25))
+                    colour = 'black'
+                elif tile == 2:
+                    colour = 'blue'
+                pygame.draw.rect(image, colour, (x * 25, y * 25, 25, 25))
 
         return image
