@@ -70,6 +70,7 @@ def prepare_sheet(directory, width, height):
         slices.append(image)
     return slices
 
+
 class Level:
     def __init__(self):
         self.level_map = []
@@ -77,7 +78,8 @@ class Level:
         self.set_level(self.level)
 
         self.wall_tiles = []
-        self.load_wall_tiles()
+        self.platform_tiles = []
+        self.load_tiles()
 
     def set_level(self, level):
         directory = 'Levels/Level' + str(level) + '.txt'
@@ -85,7 +87,7 @@ class Level:
         lines = file.readlines()
         self.level_map = [[int(char) for char in line.strip()] for line in lines]
 
-    def load_wall_tiles(self):
+    def load_tiles(self):
         sheet = pygame.image.load('Sprites/Walls.png').convert_alpha()
         for y in range(3):
             for x in range(3):
@@ -94,35 +96,51 @@ class Level:
                 image = pygame.transform.scale_by(image, (2, 2))
                 self.wall_tiles.append(image)
 
+        sheet = pygame.image.load('Sprites/Platforms.png').convert_alpha()
+        for x in range(3):
+            image = pygame.Surface((15, 15), pygame.SRCALPHA)
+            image.blit(sheet, (0, 0), (x * 15, 0, x * 15 + 15, 15))
+            image = pygame.transform.scale_by(image, (2, 2))
+            self.platform_tiles.append(image)
+
     '''
     0 = Empty Space
     1 = Wall
     2 = Platform
     '''
     def draw_level(self):
-        image = pygame.Surface((900, 600))
-        pygame.draw.rect(image, 'white', (0, 0, 900, 600))
+        level = pygame.Surface((900, 600))
+        pygame.draw.rect(level, 'white', (0, 0, 900, 600))
         for y, line in enumerate(self.level_map):
             for x, tile in enumerate(line):
-                if tile == 1:
-                    tile_type = self.find_tile(x, y)
-                    image.blit(self.wall_tiles[tile_type], (x * 30, y * 30))
-                elif tile == 2:
-                    pygame.draw.rect(image, 'blue', (x * 30, y * 30, 30, 30))
+                if tile > 0:
+                    image = self.find_tile(x, y)
+                    level.blit(image, (x*30, y*30))
 
-        return image
+        return level
 
     def find_tile(self, x, y):
-        tile_type = 4
+        tile = self.level_map[y][x]
+        if tile == 1:
+            tile_number = 4  # Starting Position
+            if y > 0 and self.level_map[y - 1][x] != 1:  # Move position up if above tile's empty
+                tile_number -= 3
+            if y < 19 and self.level_map[y + 1][x] != 1:  # Move down if below tile's empty
+                tile_number += 3
+            if x > 0 and self.level_map[y][x - 1] != 1:  # Move left if empty
+                tile_number -= 1
+            if x < 29 and self.level_map[y][x + 1] != 1:  # Move right if empty
+                tile_number += 1
 
-        if y > 0 and self.level_map[y - 1][x] != 1:  # Check tile above
-            tile_type -= 3
-        if y < 19 and self.level_map[y + 1][x] != 1:  # Check tile below
-            tile_type += 3
-        if x > 0 and self.level_map[y][x - 1] != 1:  # Check tile to the left
-            tile_type -= 1
-        if x < 29 and self.level_map[y][x + 1] != 1:  # Check tile to the right
-            tile_type += 1
+            image = self.wall_tiles[tile_number]
 
-        return tile_type
-        
+        else:  # if tile == 2
+            tile_number = 1
+            if x > 0 and self.level_map[y][x - 1] != 2:  # Move left if empty
+                tile_number -= 1
+            if x < 29 and self.level_map[y][x + 1] != 2:  # Move right if empty
+                tile_number += 1
+
+            image = self.platform_tiles[tile_number]
+
+        return image
