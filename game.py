@@ -79,6 +79,7 @@ class Level:
 
         self.wall_tiles = []
         self.platform_tiles = []
+        self.spike_tile = None
         self.load_tiles()
 
     def set_level(self, level):
@@ -91,31 +92,32 @@ class Level:
         sheet = pygame.image.load('Sprites/Walls.png').convert_alpha()
         for y in range(3):
             for x in range(3):
-                image = pygame.Surface((15, 15), pygame.SRCALPHA)
-                image.blit(sheet, (0, 0), (x * 15, y * 15, x * 15 + 15, y * 15 + 15))
-                image = pygame.transform.scale_by(image, (2, 2))
+                image = pygame.Surface((10, 10), pygame.SRCALPHA)
+                image.blit(sheet, (0, 0), (x * 10, y * 10, x * 10 + 10, y * 10 + 10))
                 self.wall_tiles.append(image)
 
         sheet = pygame.image.load('Sprites/Platforms.png').convert_alpha()
         for x in range(3):
-            image = pygame.Surface((15, 15), pygame.SRCALPHA)
-            image.blit(sheet, (0, 0), (x * 15, 0, x * 15 + 15, 15))
-            image = pygame.transform.scale_by(image, (2, 2))
+            image = pygame.Surface((10, 10), pygame.SRCALPHA)
+            image.blit(sheet, (0, 0), (x * 10, 0, x * 10 + 10, 10))
             self.platform_tiles.append(image)
+
+        image = pygame.image.load('Sprites/Spikes.png').convert_alpha()
+        self.spike_tile = image
 
     '''
     0 = Empty Space
     1 = Wall
     2 = Platform
+    3 = Spikes
     '''
     def draw_level(self):
-        level = pygame.Surface((900, 600))
-        pygame.draw.rect(level, 'white', (0, 0, 900, 600))
+        level = pygame.Surface((300, 200), pygame.SRCALPHA)
         for y, line in enumerate(self.level_map):
             for x, tile in enumerate(line):
                 if tile > 0:
                     image = self.find_tile(x, y)
-                    level.blit(image, (x*30, y*30))
+                    level.blit(image, (x*10, y*10))
 
         return level
 
@@ -134,13 +136,16 @@ class Level:
 
             image = self.wall_tiles[tile_number]
 
-        else:  # if tile == 2
+        elif tile == 2:
             tile_number = 1
-            if x > 0 and self.level_map[y][x - 1] != 2:  # Move left if empty
+            if x > 0 and self.level_map[y][x - 1] < 1:  # Move left if empty
                 tile_number -= 1
-            if x < 29 and self.level_map[y][x + 1] != 2:  # Move right if empty
+            if x < 29 and self.level_map[y][x + 1] < 1:  # Move right if empty
                 tile_number += 1
 
             image = self.platform_tiles[tile_number]
+
+        else:  # if tile == 3
+            image = self.spike_tile
 
         return image
