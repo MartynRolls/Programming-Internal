@@ -5,7 +5,7 @@ import game
 pygame.init()
 
 # Defining Variables
-size = 2
+size = 3
 width, height = size * 300, size * 200
 screen = pygame.display.set_mode((width, height))
 clock = pygame.time.Clock()
@@ -15,8 +15,10 @@ level = game.Level()
 player = game.Player()
 
 player.set_level(level.level_map)
-image = level.draw_level()
-image = pygame.transform.scale_by(image, (size, size))
+level_image = level.draw_level()
+level_image = pygame.transform.scale_by(level_image, (size, size))
+
+go_right = True
 
 # Main loop
 while True:
@@ -39,13 +41,23 @@ while True:
             player.y -= 1
     if keys[pygame.K_a]:
         player.dx -= 8
+        go_right = False
     if keys[pygame.K_d]:
         player.dx += 8
+        go_right = True
 
     player.move()
 
-    screen.blit(image, (0, 0))
-    pygame.draw.rect(screen, 'red', player.collision_box)
+    screen.blit(level_image, (0, 0))
+
+    player_sprite = pygame.transform.scale_by(player.sprites[0], (size, size))
+
+    if not go_right:
+        image = pygame.transform.flip(player_sprite, True, False)
+    else:
+        image = player_sprite
+
+    screen.blit(image, (player.x, player.y))
 
     pygame.display.flip()
     clock.tick(60)
