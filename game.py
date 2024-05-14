@@ -3,13 +3,20 @@ import pygame
 
 class Player:
     def __init__(self):
-        self.collision_box = pygame.Rect(0, 0, 30, 30)
+        self.sword = Sword()
+        self.collision_box = pygame.Rect(0, 0, 30, 45)
         self.level_map = []
         self.airborne = False
         self.x = 350
         self.y = 300
         self.dx = 0
         self.dy = 0
+        self.sprites = []
+        sheet = pygame.image.load('Sprites/Player.png').convert_alpha()
+        for x in range(3):
+            image = pygame.Surface((10, 15), pygame.SRCALPHA)
+            image.blit(sheet, (0, 0), (x * 10, 0, x * 10 + 10, 15))
+            self.sprites.append(image)
 
     def set_level(self, level):
         self.level_map = level
@@ -50,25 +57,32 @@ class Player:
 
     def collision(self, dx, dy):
         self.collision_box.topleft = self.x + dx, self.y + dy
-        for y in range(int(self.y / 30 - 1), int(self.y / 30 + 3)):
+        for y in range(int(self.y / 30 - 1), int(self.y / 30 + 4)):
             for x in range(int(self.x / 30), int(self.x / 30 + 2)):
                 collide = self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 30))
                 if collide:
                     if self.level_map[y][x] == 1:
                         return True
-                    if self.level_map[y][x] == 2 and self.y - dy + 30 < y*30:
+                    if self.level_map[y][x] == 2 and self.y - dy + 45 < y*30:
                         return True
         return False
 
+    def death_collision(self, dx, dy):
+        self.collision_box.topleft = self.x + dx, self.y + dy
+        y = self.y // 30 + 1
+        for x in range(int(self.x / 30), int(self.x / 30 + 2)):
+            if self.level_map[y][x] == 3:
+                collide = self.collision_box.colliderect(pygame.Rect(x * 30 + 12, y * 30 + 3, 24, 18))
+                if collide:
+                    return True
+        return False
 
-def prepare_sheet(directory, width, height):
-    slices = []
-    sheet = pygame.image.load(directory).convert_alpha()
-    for i in range(sheet.get_width() // width):
-        image = pygame.Surface((width, height + 8), pygame.SRCALPHA)
-        image.blit(sheet, (0, 0), (i * width, 0, (i + 1) * width, height))
-        slices.append(image)
-    return slices
+
+class Sword:
+    def __init__(self):
+        self.equipped = True
+
+
 
 
 class Level:
