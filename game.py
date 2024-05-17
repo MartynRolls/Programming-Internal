@@ -7,10 +7,13 @@ class Player:
         self.collision_box = pygame.Rect(0, 0, 30, 45)
         self.level_map = []
         self.airborne = False
-        self.x = 350
+        self.x = 351
         self.y = 300
         self.dx = 0
         self.dy = 0
+        self.facing_left = True
+        self.step = 0
+
         self.sprites = []
         sheet = pygame.image.load('Sprites/Player.png').convert_alpha()
         for x in range(3):
@@ -22,6 +25,11 @@ class Player:
         self.level_map = level
 
     def move(self):
+        if self.dx != 0 and self.dy == 0:
+            self.step += 1
+        if self.step > 14:
+            self.step = 0
+
         self.x += self.dx
 
         while self.collision(0, 0):
@@ -77,10 +85,39 @@ class Player:
                     return True
         return False
 
+    def draw_player(self):
+        surface = pygame.Surface((300, 200), pygame.SRCALPHA)
+
+        if self.dx < 0:
+            self.facing_left = True
+        elif self.dx > 0:
+            self.facing_left = False
+
+        if self.dx != 0 and self.dy == 0:
+            if self.step > 7:
+                sprite1 = self.sprites[1]
+            else:
+                sprite1 = self.sprites[2]
+        else:
+            sprite1 = self.sprites[0]
+
+        sprite2 = self.sword.sprite
+
+        if self.facing_left:
+            sprite1 = pygame.transform.flip(sprite1, True, False)
+            sprite2 = pygame.transform.flip(sprite2, True, False)
+
+        x, y = int(self.x / 3), int(self.y / 3)
+        surface.blit(sprite2, (x-3, y))
+        surface.blit(sprite1, (x, y))
+        return surface
+
+
 
 class Sword:
     def __init__(self):
         self.equipped = True
+        self.sprite = pygame.image.load('Sprites/Sword.png')
 
 
 
