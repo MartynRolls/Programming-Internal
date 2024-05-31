@@ -7,10 +7,12 @@ class Player:
         self.collision_box = pygame.Rect(0, 0, 30, 45)
         self.level_map = []
         self.airborne = False
+        self.alive = True
         self.x = 351
         self.y = 300
         self.dx = 0
         self.dy = 0
+
         self.facing_left = True
         self.step = 0
 
@@ -21,40 +23,36 @@ class Player:
             image.blit(sheet, (0, 0), (x * 10, 0, x * 10 + 10, 15))
             self.sprites.append(image)
 
-    def set_level(self, level):
-        self.level_map = level
-
     def move(self):
-        if self.dx != 0 and self.dy == 0:
-            self.step += 1
-        if self.step > 14:
-            self.step = 0
-
+        # X movement
         self.x += self.dx
-
-        while self.collision(0, 0):
+        while self.collision(0, 0):  # If there is a collision, shift the player over
             self.x += 1 if self.dx < 0 else -1
 
-        if self.airborne:
+        # Y movement
+        if self.airborne:  # If the player is falling, fall
             self.fall()
-        elif not self.collision(0, 1):
+        elif not self.collision(0, 1):  # If the player should be falling, fall
             self.airborne = True
 
-        self.collision_box.topleft = self.x, self.y
+        # Handling the swords movement
+        if self.sword.airborne:  # Move the sword if it's flying
+            self.sword.move()
+        elif self.sword.equipped:  # Place the sword on the player if it's meant to be there
+            self.sword.x = self.x
+            self.sword.y = self.y
 
     def jump(self):
-        if self.collision(0, 5) and not self.airborne:
+        if self.collision(0, 5) and not self.airborne:  # Jump if not airborne, and touching the ground
             self.airborne = True
             self.dy = -14
 
     def fall(self):
-        if self.collision(0, self.dy):
-            if self.dy < 0:
-                while self.collision(0, self.dy):
-                    self.dy += 1
-            else:
-                while self.collision(0, self.dy):
-                    self.dy -= 1
+        if self.collision(0, self.dy):  # If there is a collision, try to stop it
+            while self.collision(0, self.dy):
+                self.y += 1 if self.dy < 0 else -1
+
+            if self.dy >= 0:  # If the players landed on the floor, they're not falling anymore
                 self.airborne = False
 
             self.y += self.dy
@@ -88,10 +86,21 @@ class Player:
     def draw_player(self):
         surface = pygame.Surface((300, 200), pygame.SRCALPHA)
 
-        if self.dx < 0:
+        if self.sword.equipped:  # Make the sword face the right way
+            if self.dx < 0:
+                self.sword.facing_left = True
+            elif self.dx > 0:
+                self.sword.facing_left = False
+
+        if self.dx < 0:  # Make the player face the correct way
             self.facing_left = True
         elif self.dx > 0:
             self.facing_left = False
+
+        if self.dx != 0 and self.dy == 0:  # Move to the next part of the players animation
+            self.step += 1
+        if self.step > 14:
+            self.step = 0
 
         if self.dx != 0 and self.dy == 0:
             if self.step > 7:
@@ -105,19 +114,53 @@ class Player:
 
         if self.facing_left:
             sprite1 = pygame.transform.flip(sprite1, True, False)
+        if self.sword.facing_left:
             sprite2 = pygame.transform.flip(sprite2, True, False)
 
-        x, y = int(self.x / 3), int(self.y / 3)
-        surface.blit(sprite2, (x-3, y))
-        surface.blit(sprite1, (x, y))
-        return surface
+        x, y = int(self.sword.x / 3 - 3), int(self.sword.y / 3)
+        surface.blit(sprite2, (x, y))
 
+        x, y = int(self.x / 3), int(self.y / 3)
+        surface.blit(sprite1, (x, y))
+
+        return surface
 
 
 class Sword:
     def __init__(self):
         self.equipped = True
+        self.airborne = False
+        self.level_map = []
         self.sprite = pygame.image.load('Sprites/Sword.png')
+        self.collision_box = pygame.Rect(0, 0, 30, 45)
+        self.x = 0
+        self.y = 0
+        self.facing_left = True
+
+    def throw(self):
+        if self.equipped:  # If the sword is equipped, throw it.
+            self.equipped = False
+            self.airborne = True
+        elif not self.airborne:
+            self.equipped = True
+            self.airborne = False
+
+    def move(self):
+        self.x -= 9 if self.facing_left else -9
+        if self.collision():
+            self.airborne = False
+            while self.collision():
+                self.x += 1 if self.facing_left else -1
+
+    def collision(self):
+        self.collision_box.topleft = self.x, self.y
+        for y in range(int(self.y / 30 - 1), int(self.y / 30 + 4)):
+            for x in range(int(self.x / 30), int(self.x / 30 + 2)):
+                collide = self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 30))
+                if collide:
+                    if self.level_map[y][x] == 1:
+                        return True
+        return False
 
 
 
