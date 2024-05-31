@@ -14,7 +14,9 @@ pygame.display.set_caption('Window Title')
 level = game.Level()
 player = game.Player()
 
-player.set_level(level.level_map)
+player.level_map = level.level_map
+player.sword.level_map = level.level_map
+
 level_image = level.draw_level()
 level_image = pygame.transform.scale_by(level_image, (size, size))
 
@@ -31,6 +33,8 @@ while True:
     # Checking key presses
     player.dx = 0
     keys = pygame.key.get_pressed()
+    if keys[pygame.K_SPACE]:
+        player.sword.throw()
     if keys[pygame.K_w]:
         player.jump()
     if keys[pygame.K_s]:
@@ -39,13 +43,15 @@ while True:
             player.y -= 1
     if keys[pygame.K_a]:
         player.dx -= 6
-        go_right = False
     if keys[pygame.K_d]:
         player.dx += 6
 
     player.move()
 
     screen.blit(level_image, (0, 0))
+
+    player.sword.collision_box.topleft = player.sword.x, player.sword.y
+    pygame.draw.rect(screen, 'red', player.sword.collision_box)
 
     image = player.draw_player()
     image = pygame.transform.scale_by(image, (size, size))
