@@ -9,7 +9,7 @@ size = 3
 width, height = size * 300, size * 200
 screen = pygame.display.set_mode((width, height))
 clock = pygame.time.Clock()
-pygame.display.set_caption('Window Title')
+pygame.display.set_caption('Cool Game')
 
 level = game.Level()
 player = game.Player()
@@ -18,7 +18,6 @@ player.level_map = level.level_map
 player.sword.level_map = level.level_map
 
 level_image = level.draw_level()
-level_image = pygame.transform.scale_by(level_image, (size, size))
 
 # Main loop
 while True:
@@ -46,16 +45,31 @@ while True:
     if keys[pygame.K_d]:
         player.dx += 6
 
-    player.move()
+    player.move()  # Move the player
 
-    screen.blit(level_image, (0, 0))
+    player.enemy_list = []
+    for enemy in level.enemies:
+        enemy.sword_location = player.sword.collision_box  # Telling enemies where the sword is
+        enemy.move(player.sword.airborne)  # Move all the enemies
+        player.enemy_list.append(enemy.collision_box)  # Tell player enemy locations
 
-    player.sword.collision_box.topleft = player.sword.x, player.sword.y
-    pygame.draw.rect(screen, 'red', player.sword.collision_box)
+    # Drawing sprites
+    surface = pygame.Surface((300, 200), pygame.SRCALPHA)
+
+    image = player.sword.draw_sword()
+    surface.blit(image, (0, 0))
+
+    image = level_image
+    surface.blit(image, (0, 0))
+
+    image = level.draw_enemies()
+    surface.blit(image, (0, 0))
 
     image = player.draw_player()
-    image = pygame.transform.scale_by(image, (size, size))
-    screen.blit(image, (0, 0))
+    surface.blit(image, (0, 0))
+
+    surface = pygame.transform.scale_by(surface, (size, size))
+    screen.blit(surface, (0, 0))
 
     pygame.display.flip()
     clock.tick(60)
