@@ -1,20 +1,22 @@
 import pygame
+from random import randint
 
 
 class Player:
-    def __init__(self):
+    def __init__(self, position, goal_location):
         self.sword = Sword()
+        self.goal = Goal(goal_location)
         self.collision_box = pygame.Rect(0, 0, 30, 45)
         self.level_map = []
         self.enemy_list = []
         self.airborne = False
         self.alive = True
-        self.x = 351
-        self.y = 300
-        self.dx = 0
-        self.dy = 0
+        self.death_details = [0, 0, 0]
 
-        self.facing_left = True
+        self.x, self.y = position
+        self.dx, self.dy = 0, 0
+
+        self.facing_left = False
         self.step = 0
 
         self.sprites = []
@@ -25,16 +27,27 @@ class Player:
             self.sprites.append(image)
 
     def move(self):
-        # X movement
-        self.x += self.dx
-        while self.collision(0, 0):  # If there is a collision, shift the player over
-            self.x += 1 if self.dx < 0 else -1
+        if self.alive:
+            # X movement
+            self.x += self.dx
+            while self.collision(0, 0):  # If there is a collision, shift the player over
+                self.x += 1 if self.dx < 0 else -1
 
-        # Y movement
-        if self.airborne:  # If the player is falling, fall
-            self.fall()
-        elif not self.collision(0, 1):  # If the player should be falling, fall
-            self.airborne = True
+            # Y movement
+            if self.airborne:  # If the player is falling, fall
+                self.fall()
+            elif not self.collision(0, 1):  # If the player should be falling, fall
+                self.airborne = True
+
+            if self.death_collision(0, 0):  # Handling a death
+                self.alive = False
+                self.death_details = [0, randint(-5, 5), randint(-16, -8)]
+
+        else:  # If dead
+            self.death_details[0] += 1  # Add one to timer
+            self.death_details[2] += 0.5  # Gravity
+            self.x += self.death_details[1]
+            self.y += self.death_details[2]
 
         # Handling the swords movement
         if self.sword.airborne:  # Move the sword if it's flying
@@ -42,6 +55,9 @@ class Player:
         elif self.sword.equipped:  # Place the sword on the player if it's meant to be there
             self.sword.x = self.x
             self.sword.y = self.y
+
+        # Updating goal sprite
+        self.goal.next_step()
 
     def jump(self):
         if self.collision(0, 5) and not self.airborne:  # Jump if not airborne, and touching the ground
@@ -114,7 +130,7 @@ class Player:
         if self.step > 14:
             self.step = 0
 
-        if self.dx != 0 and self.dy == 0:  # Fetch the correct sprite for the player
+        if self.dx != 0 and self.dy == 0 and self.alive:  # Fetch the correct sprite for the player
             if self.step > 7:
                 sprite = self.sprites[1]
             else:
@@ -140,16 +156,13 @@ class Sword:
         self.collision_box = pygame.Rect(0, 0, 45, 9)
         self.x = 0
         self.y = 0
-        self.facing_left = True
+        self.facing_left = False
 
     def throw(self):
         if self.equipped:  # If the sword is equipped, throw it.
             self.equipped = False
             self.airborne = True
             self.y += 15
-        elif not self.airborne:
-            self.equipped = True
-            self.airborne = False
 
     def move(self):
         self.x -= 9 if self.facing_left else -9
@@ -191,6 +204,37 @@ class Sword:
         return surface
 
 
+class Goal:
+    def __init__(self, collision_box):
+        self.collision_box = collision_box
+        self.x, self.y = collision_box.topleft
+        self.sprites = []
+        sheet = pygame.image.load('Sprites/Goal.png').convert_alpha()
+        for x in range(20):
+            image = pygame.Surface((10, 10), pygame.SRCALPHA)
+            image.blit(sheet, (0, 0), (x * 10, 0, x * 10 + 10, 10))
+            self.sprites.append(image)
+
+        self.frame = 0
+        self.step = 0
+
+    def next_step(self):
+        self.frame += 1 if self.frame != 199 else -199
+
+        if self.frame % 10 == 0:
+            self.step += 1 if self.step != 19 else -19
+
+    def draw_goal(self):
+        surface = pygame.Surface((300, 200), pygame.SRCALPHA)
+
+        sprite = self.sprites[self.step]
+
+        x, y = int(self.x / 3), int(self.y / 3)
+        surface.blit(sprite, (x, y))
+
+        return surface
+
+
 class Enemy:
     def __init__(self, x, y, level):
         self.collision_box = pygame.Rect(x * 30, y * 30, 30, 30)
@@ -200,6 +244,8 @@ class Enemy:
         self.step = 0
         self.level_map = level
         self.sword_location = []
+        self.alive = True
+        self.death_details = [0, 0]
 
         self.animation_step = 0
         self.sprites = []
@@ -210,22 +256,30 @@ class Enemy:
             self.sprites.append(image)
 
     def move(self, sword_killing):
-        self.step += 1
-        if self.step == 5:
-            self.step = 0
+        if self.alive:
+            self.step += 1
+            if self.step == 5:
+                self.step = 0
 
-            self.x += -3 if self.facing_left else 3
-            if self.collision():
-                self.facing_left = not self.facing_left
-                self.x += -6 if self.facing_left else 6
+                self.x += -3 if self.facing_left else 3
+                if self.collision():
+                    self.facing_left = not self.facing_left
+                    self.x += -6 if self.facing_left else 6
 
-            self.animation_step += 1
-            if self.animation_step == 3:
-                self.animation_step = 0
+                self.animation_step += 1
+                if self.animation_step == 3:
+                    self.animation_step = 0
 
-        collide = self.collision_box.colliderect(self.sword_location)
-        if collide and sword_killing:
-            print('Enemy Down!')
+            collide = self.collision_box.colliderect(self.sword_location)
+            if collide and sword_killing:
+                self.alive = False
+                self.death_details = [0, randint(-5, 5), randint(-16, -8)]
+
+        else:  # If dead
+            self.death_details[2] += 0.5  # Gravity
+            self.x += self.death_details[1]
+            self.y += self.death_details[2]
+            self.collision_box.topleft = 0, 0
 
     def collision(self):
         self.collision_box.topleft = self.x, self.y
@@ -250,9 +304,9 @@ class Enemy:
 
 
 class Level:
-    def __init__(self):
+    def __init__(self, level):
         self.level_map = []
-        self.level = 1
+        self.level = level
         self.set_level(self.level)
 
         self.enemies = []
@@ -260,6 +314,7 @@ class Level:
         self.wall_tiles = []
         self.platform_tiles = []
         self.spike_tile = None
+        self.image = None
         self.load_tiles()
 
     def set_level(self, level):
@@ -298,18 +353,28 @@ class Level:
     2 = Platform
     3 = Spikes
     4 = Enemies
+    
+    9 = Player Starting Pos
     '''
     def draw_level(self):
+        cords = (0, 0)
+        goal = pygame.Rect(0, 0, 30, 30)
         level = pygame.Surface((300, 200), pygame.SRCALPHA)
+
         for y, line in enumerate(self.level_map):
             for x, tile in enumerate(line):
-                if tile == 4:
+                if tile == 9:
+                    cords = (x * 30, y * 30 - 15)
+                elif tile == 8:
+                    goal.topleft = x * 30, y * 30 - 15
+                elif tile == 4:
                     self.enemies.append(Enemy(x, y, self.level_map))
                 elif tile > 0:
                     image = self.find_tile(x, y)
                     level.blit(image, (x*10, y*10))
 
-        return level
+        self.image = level
+        return cords, goal
 
     def find_tile(self, x, y):
         tile = self.level_map[y][x]
