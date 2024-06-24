@@ -3,28 +3,27 @@ from random import randint
 
 
 class Player:
-    def __init__(self, position, goal_location):
+    def __init__(self):
         self.sword = Sword()
-        self.goal = Goal(goal_location)
         self.collision_box = pygame.Rect(0, 0, 30, 45)
         self.level_map = []
+        self.goal_list = []
         self.enemy_list = []
+        self.switch_on = False
         self.airborne = False
         self.alive = True
-        self.death_details = [0, 0, 0]
+        self.won = False
+        self.death_details = [0, 0]
 
-        self.x, self.y = position
+        self.x, self.y = 0, 0
         self.dx, self.dy = 0, 0
 
         self.facing_left = False
         self.step = 0
 
         self.sprites = []
-        sheet = pygame.image.load('Sprites/Player.png').convert_alpha()
-        for x in range(3):
-            image = pygame.Surface((10, 15), pygame.SRCALPHA)
-            image.blit(sheet, (0, 0), (x * 10, 0, x * 10 + 10, 15))
-            self.sprites.append(image)
+        sheet = pygame.image.load('Sprites/Player.png')
+        self.sprites = load_sheet(sheet, 10, 15, 3)
 
     def move(self):
         if self.alive:
@@ -41,13 +40,18 @@ class Player:
 
             if self.death_collision(0, 0):  # Handling a death
                 self.alive = False
-                self.death_details = [0, randint(-5, 5), randint(-16, -8)]
+                self.death_details = [randint(-5, 5), randint(-16, -8)]
+
+            for goal in self.goal_list:
+                if self.collision_box.colliderect(goal):
+                    self.goal_list.remove(goal)
+                    if not self.goal_list:
+                        self.won = True
 
         else:  # If dead
-            self.death_details[0] += 1  # Add one to timer
-            self.death_details[2] += 0.5  # Gravity
-            self.x += self.death_details[1]
-            self.y += self.death_details[2]
+            self.death_details[1] += 0.5  # Gravity
+            self.x += self.death_details[0]
+            self.y += self.death_details[1]
 
         # Handling the swords movement
         if self.sword.airborne:  # Move the sword if it's flying
@@ -55,9 +59,6 @@ class Player:
         elif self.sword.equipped:  # Place the sword on the player if it's meant to be there
             self.sword.x = self.x
             self.sword.y = self.y
-
-        # Updating goal sprite
-        self.goal.next_step()
 
     def jump(self):
         if self.collision(0, 5) and not self.airborne:  # Jump if not airborne, and touching the ground
@@ -82,14 +83,15 @@ class Player:
         self.collision_box.topleft = self.x + dx, self.y + dy
         for y in range(int(self.y / 30 - 1), int(self.y / 30 + 4)):
             for x in range(int(self.x / 30), int(self.x / 30 + 2)):
-                collide = self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 30))
-                if collide:
+                if self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 30)):  # If collision
                     if self.level_map[y][x] == 1:
                         return True
                     if self.level_map[y][x] == 2 and self.y - dy + 45 < y*30:
                         return True
+                    if self.level_map[y][x] == 5 and self.switch_on:
+                        return True
 
-        collide = self.collision_box.colliderect(self.sword.collision_box)
+        collide = self.collision_box.colliderect(self.sword.collision_box)  # Checking collision with sword
         if collide and self.y - dy + 45 < self.sword.y:
             return True
 
@@ -99,14 +101,12 @@ class Player:
         self.collision_box.topleft = self.x + dx, self.y + dy
         y = self.y // 30 + 1
         for x in range(int(self.x / 30), int(self.x / 30 + 2)):
-            if self.level_map[y][x] == 3:
-                collide = self.collision_box.colliderect(pygame.Rect(x * 30 + 12, y * 30 + 3, 24, 18))
-                if collide:
-                    return True
+            collide = self.collision_box.colliderect(pygame.Rect(x * 30 + 12, y * 30 + 3, 24, 18))
+            if self.level_map[y][x] == 3 and collide:
+                return True
 
         for enemy in self.enemy_list:
-            collide = self.collision_box.colliderect(enemy)
-            if collide:
+            if self.collision_box.colliderect(enemy):
                 return True
 
         return False
@@ -205,32 +205,47 @@ class Sword:
 
 
 class Goal:
-    def __init__(self, collision_box):
-        self.collision_box = collision_box
-        self.x, self.y = collision_box.topleft
-        self.sprites = []
-        sheet = pygame.image.load('Sprites/Goal.png').convert_alpha()
-        for x in range(20):
-            image = pygame.Surface((10, 10), pygame.SRCALPHA)
-            image.blit(sheet, (0, 0), (x * 10, 0, x * 10 + 10, 10))
-            self.sprites.append(image)
+    def __init__(self, x, y):
+        self.collision_box = pygame.Rect(x, y, 30, 30)
+        self.x, self.y = x, y
+        self.player_location = None
+        self.got = False
+
+        sheet = pygame.image.load('Sprites/Goal.png')
+        self.sprites1 = load_sheet(sheet, 10, 10, 20)
+
+        sheet = pygame.image.load('Sprites/GoalGot.png')
+        self.sprites2 = load_sheet(sheet, 16, 30, 18)
 
         self.frame = 0
-        self.step = 0
+        self.step1 = 0
+        self.step2 = 0
 
     def next_step(self):
         self.frame += 1 if self.frame != 199 else -199
 
         if self.frame % 10 == 0:
-            self.step += 1 if self.step != 19 else -19
+            self.step1 += 1 if self.step1 != 19 else -19
+            if self.got and self.step2 != 17:
+                self.step2 += 1
+
+        if self.collision_box.colliderect(self.player_location):
+            self.got = True
 
     def draw_goal(self):
         surface = pygame.Surface((300, 200), pygame.SRCALPHA)
 
-        sprite = self.sprites[self.step]
+        if not self.got or self.step2 < 5:
+            sprite = self.sprites1[self.step1]
 
-        x, y = int(self.x / 3), int(self.y / 3)
-        surface.blit(sprite, (x, y))
+            x, y = int(self.x / 3), int(self.y / 3)
+            surface.blit(sprite, (x, y))
+
+        if self.got:
+            sprite = self.sprites2[self.step2]
+
+            x, y = int(self.x / 3) - 3, int(self.y / 3) - 17
+            surface.blit(sprite, (x, y))
 
         return surface
 
@@ -243,17 +258,13 @@ class Enemy:
         self.facing_left = True
         self.step = 0
         self.level_map = level
-        self.sword_location = []
+        self.sword_location = None
         self.alive = True
         self.death_details = [0, 0]
 
         self.animation_step = 0
-        self.sprites = []
-        sheet = pygame.image.load('Sprites/Enemy.png').convert_alpha()
-        for x in range(3):
-            image = pygame.Surface((10, 10), pygame.SRCALPHA)
-            image.blit(sheet, (0, 0), (x * 10, 0, x * 10 + 10, 10))
-            self.sprites.append(image)
+        sheet = pygame.image.load('Sprites/Enemy.png')
+        self.sprites = load_sheet(sheet, 10, 10, 3)
 
     def move(self, sword_killing):
         if self.alive:
@@ -308,12 +319,16 @@ class Level:
         self.level_map = []
         self.level = level
         self.set_level(self.level)
+        self.step = 0
+        self.clear = True
 
         self.enemies = []
+        self.goals = []
 
         self.wall_tiles = []
         self.platform_tiles = []
         self.spike_tile = None
+        self.switch_clear_tiles = []
         self.image = None
         self.load_tiles()
 
@@ -324,26 +339,60 @@ class Level:
         self.level_map = [[int(char) for char in line.strip()] for line in lines]
 
     def load_tiles(self):
-        sheet = pygame.image.load('Sprites/Walls.png').convert_alpha()
-        for y in range(3):
-            for x in range(3):
-                image = pygame.Surface((10, 10), pygame.SRCALPHA)
-                image.blit(sheet, (0, 0), (x * 10, y * 10, x * 10 + 10, y * 10 + 10))
-                self.wall_tiles.append(image)
+        sheet = pygame.image.load('Sprites/Walls.png')
+        self.wall_tiles = load_sheet(sheet, 10, 10, 9)
 
-        sheet = pygame.image.load('Sprites/Platforms.png').convert_alpha()
-        for x in range(3):
-            image = pygame.Surface((10, 10), pygame.SRCALPHA)
-            image.blit(sheet, (0, 0), (x * 10, 0, x * 10 + 10, 10))
-            self.platform_tiles.append(image)
+        sheet = pygame.image.load('Sprites/Platforms.png')
+        self.platform_tiles = load_sheet(sheet, 10, 10, 3)
 
         image = pygame.image.load('Sprites/Spikes.png').convert_alpha()
         self.spike_tile = image
+
+        sheet = pygame.image.load('Sprites/SwitchClear.png')
+        sheet = load_sheet(sheet, 90, 10, 4)
+        self.switch_clear_tiles = [load_sheet(sheet[i], 10, 10, 9) for i in range(4)]
 
     def draw_enemies(self):
         surface = pygame.Surface((300, 200), pygame.SRCALPHA)
         for enemy in self.enemies:
             surface.blit(enemy.draw_enemy(), (0, 0))
+
+        return surface
+
+    def draw_goals(self):
+        surface = pygame.Surface((300, 200), pygame.SRCALPHA)
+        for goal in self.goals:
+            surface.blit(goal.draw_goal(), (0, 0))
+
+        return surface
+
+    def draw_switch(self):
+        self.step += 1 if self.step != 39 else -39
+        surface = pygame.Surface((300, 200), pygame.SRCALPHA)
+
+        for y, line in enumerate(self.level_map):
+            for x, tile in enumerate(line):
+                if tile == 5:
+                    tile_number = 4  # Starting Position
+                    if y > 0 and self.level_map[y - 1][x] != 5:  # Move position up if above tile's empty
+                        tile_number -= 3
+                    if y < 19 and self.level_map[y + 1][x] != 5:  # Move down if below tile's empty
+                        tile_number += 3
+                    if x > 0 and self.level_map[y][x - 1] != 5:  # Move left if empty
+                        tile_number -= 1
+                    if x < 29 and self.level_map[y][x + 1] != 5:  # Move right if empty
+                        tile_number += 1
+
+                    if self.clear:
+                        image = self.switch_clear_tiles[int(self.step / 10)][tile_number]
+                        surface.blit(image, (x * 10, y * 10))
+
+                    else:
+                        image = self.wall_tiles[tile_number]
+                        surface.blit(image, (x * 10, y * 10))
+
+        else:
+            pass
 
         return surface
 
@@ -353,12 +402,12 @@ class Level:
     2 = Platform
     3 = Spikes
     4 = Enemies
-    
+    5 = Switch Tiles
+    8 = Goals
     9 = Player Starting Pos
     '''
     def draw_level(self):
         cords = (0, 0)
-        goal = pygame.Rect(0, 0, 30, 30)
         level = pygame.Surface((300, 200), pygame.SRCALPHA)
 
         for y, line in enumerate(self.level_map):
@@ -366,15 +415,15 @@ class Level:
                 if tile == 9:
                     cords = (x * 30, y * 30 - 15)
                 elif tile == 8:
-                    goal.topleft = x * 30, y * 30 - 15
+                    self.goals.append(Goal(x * 30, y * 30 - 15))
                 elif tile == 4:
                     self.enemies.append(Enemy(x, y, self.level_map))
-                elif tile > 0:
+                elif tile > 0 and tile != 5:
                     image = self.find_tile(x, y)
                     level.blit(image, (x*10, y*10))
 
         self.image = level
-        return cords, goal
+        return cords
 
     def find_tile(self, x, y):
         tile = self.level_map[y][x]
@@ -404,3 +453,26 @@ class Level:
             image = self.spike_tile
 
         return image
+
+
+def load_sheet(sheet, x, y, z):
+    return_list = []
+    for i in range(z):
+        image = pygame.Surface((x, y), pygame.SRCALPHA)
+        image.blit(sheet, (0, 0), (i * x, 0, (i + 1) * x, y))
+        return_list.append(image)
+    return return_list
+
+
+def start_game(level):
+    level = Level(level)
+    cords = level.draw_level()
+
+    player = Player()
+    player.x, player.y = cords
+    player.level_map = level.level_map
+    player.sword.level_map = level.level_map
+    for goal in level.goals:
+        player.goal_list.append(goal.collision_box)
+
+    return level, player
