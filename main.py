@@ -5,28 +5,28 @@ import game
 pygame.init()
 
 # Defining Variables
-size = 3
+size = 5
 width, height = size * 300, size * 200
 screen = pygame.display.set_mode((width, height))
 clock = pygame.time.Clock()
 pygame.display.set_caption('Cool Game')
 
-step = 0
+sheet = pygame.image.load('Sprites/Transition.png')
+transition_tiles = game.load_sheet(sheet, 10, 10, 32)
 transition = 0
-transition_tiles = []
-sheet = pygame.image.load('Sprites/Transition.png').convert_alpha()
-for x in range(32):
-    image = pygame.Surface((10, 10), pygame.SRCALPHA)
-    image.blit(sheet, (0, 0), (x * 10, 0, x * 10 + 10, 10))
-    transition_tiles.append(image)
+wait = 0
 
+current = 0
+info = []
+info.append(None)
+sheet = pygame.image.load('Sprites/Info/Info2.png')
+info.append(game.load_sheet(sheet, 110, 20, 10))
+sheet = pygame.image.load('Sprites/Info/Info3.png')
+info.append(game.load_sheet(sheet, 65, 14, 6))
+step = 0
 
-level = game.Level(1)
-cords, goal = level.draw_level()
-
-player = game.Player(cords, goal)
-player.level_map = level.level_map
-player.sword.level_map = level.level_map
+# Setting up game
+level, player = game.start_game(10)
 
 # Main loop
 while True:
@@ -36,9 +36,14 @@ while True:
             pygame.quit()
             exit()
 
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_r and not transition:
+        if event.type == pygame.KEYDOWN and not transition:
+            if level.level == 0:
                 transition = 1
+                level.level += 1
+            if event.key == pygame.K_r:
+                transition = 1
+            if event.key == pygame.K_p:
+                level.clear = not level.clear
 
     screen.fill((30, 60, 90))
 
@@ -48,23 +53,23 @@ while True:
     if player.alive:
         if keys[pygame.K_SPACE]:
             player.sword.throw()
-        if keys[pygame.K_w]:
+        if keys[pygame.K_w] or keys[pygame.K_UP]:
             player.jump()
-        if keys[pygame.K_s]:
+        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+            player.dx -= 5
+        if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+            player.dx += 5
+        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
             player.y += 1
             if player.collision(0, 0):
                 player.y -= 1
-        if keys[pygame.K_a]:
-            player.dx -= 6
-        if keys[pygame.K_d]:
-            player.dx += 6
 
     player.move()  # Move the player
+    player.switch_on = not level.clear
 
-    collide = player.collision_box.colliderect(player.goal.collision_box)
-    if collide and not transition:  # Checking for a win
-        transition = 1
-        level.level += 1
+    for goal in level.goals:
+        goal.player_location = player.collision_box  # Tell goals where the player is
+        goal.next_step()  # Updating goal sprite
 
     player.enemy_list = []
     for enemy in level.enemies:
@@ -81,36 +86,56 @@ while True:
     image = level.image
     surface.blit(image, (0, 0))
 
+    image = level.draw_switch()
+    surface.blit(image, (0, 0))
+
     image = level.draw_enemies()
     surface.blit(image, (0, 0))
 
-    image = player.goal.draw_goal()
+    image = level.draw_goals()
     surface.blit(image, (0, 0))
 
     image = player.draw_player()
     surface.blit(image, (0, 0))
 
+    # Seeing if information should be displayed, and displaying it
+    if current == 1:
+        step += 1 if step != 199 else -199
+        image = info[1][int(step / 20)]
+        surface.blit(image, (30, 170))
+    elif current == 2:
+        step += 1 if step != 119 else -119
+        image = info[2][int(step / 20)]
+        surface.blit(image, (30, 170))
+
     # Drawing transition if needed
     if transition:
-        transition += 1
-        if transition % 5 == 0:
-            step += 1
-
-        if transition == 75:
-            level = game.Level(level.level)
-            cords, goal = level.draw_level()
-
-            player = game.Player(cords, goal)
-            player.level_map = level.level_map
-            player.sword.level_map = level.level_map
-
-        try:
+        if wait == 0:
+            transition += 1
             for x in range(30):
                 for y in range(20):
-                    surface.blit(transition_tiles[step], (x * 10, y * 10))
-        except IndexError:
-            transition = 0
-            step = 0
+                    surface.blit(transition_tiles[int(transition // 5)], (x * 10, y * 10))
+
+            if transition == 159:  # Break at end of animation
+                transition = 0
+            elif transition == 75:  # Set up game (again)
+                level, player = game.start_game(level.level)
+                player.move()  # To prevent sword breaking game
+                '''DEVELOPMENT!!!'''
+                if 4 > level.level > current:
+                    current += 1
+                    step = 0
+
+        else:
+            wait -= 1
+
+    elif player.won:
+        wait = 90
+        transition = 1
+        level.level += 1
+    elif not player.alive:
+        wait = 30
+        transition = 1
 
     # Placing image onto screen
     surface = pygame.transform.scale_by(surface, (size, size))
@@ -118,4 +143,3 @@ while True:
 
     pygame.display.flip()
     clock.tick(60)
-    # print(clock.get_fps())
