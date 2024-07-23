@@ -9,24 +9,29 @@ size = 5
 width, height = size * 300, size * 200
 screen = pygame.display.set_mode((width, height))
 clock = pygame.time.Clock()
-pygame.display.set_caption('Cool Game')
+pygame.display.set_caption('Moon kNight')
 
 sheet = pygame.image.load('Sprites/Transition.png')
 transition_tiles = game.load_sheet(sheet, 10, 10, 32)
 transition = 0
 wait = 0
 
-current = 0
 info = []
-info.append(None)
+sheet = pygame.image.load('Sprites/Info/Info1.png')
+info.append(pygame.transform.scale_by(sheet, (2, 2)))
 sheet = pygame.image.load('Sprites/Info/Info2.png')
 info.append(game.load_sheet(sheet, 110, 20, 10))
 sheet = pygame.image.load('Sprites/Info/Info3.png')
 info.append(game.load_sheet(sheet, 65, 14, 6))
 step = 0
 
+pygame.mixer.music.load('Sound Effects/Music.mp3')
+pygame.mixer.music.play(-1)
+win_effect = pygame.mixer.Sound("Sound Effects/Win.mp3")
+
 # Setting up game
-level, player = game.start_game(10)
+level, player = game.start_game(0)
+current = level.level
 
 # Main loop
 while True:
@@ -40,10 +45,8 @@ while True:
             if level.level == 0:
                 transition = 1
                 level.level += 1
-            if event.key == pygame.K_r:
+            elif event.key == pygame.K_r:
                 transition = 1
-            if event.key == pygame.K_p:
-                level.clear = not level.clear
 
     screen.fill((30, 60, 90))
 
@@ -65,23 +68,26 @@ while True:
                 player.y -= 1
 
     player.move()  # Move the player
-    player.switch_on = not level.clear
+    level.clear = not player.switch_on
+
+    player.enemy_list = []  # Clear enemy positions
+    for enemy in level.enemies:
+        enemy.sword_location = player.sword.collision_box  # Telling enemies where the sword is
+        enemy.switch_on = not level.clear  # Telling enemies if switch-blocks are on
+        enemy.move((player.sword.dy or player.sword.airborne))  # Move all the enemies
+        player.enemy_list.append(enemy.collision_box)  # Tell player enemy locations
 
     for goal in level.goals:
         goal.player_location = player.collision_box  # Tell goals where the player is
+        goal.enemy_list = player.enemy_list  # Tell goals where enemies are
         goal.next_step()  # Updating goal sprite
-
-    player.enemy_list = []
-    for enemy in level.enemies:
-        enemy.sword_location = player.sword.collision_box  # Telling enemies where the sword is
-        enemy.move(player.sword.airborne)  # Move all the enemies
-        player.enemy_list.append(enemy.collision_box)  # Tell player enemy locations
 
     # Drawing sprites
     surface = pygame.Surface((300, 200), pygame.SRCALPHA)
 
-    image = player.sword.draw_sword()
-    surface.blit(image, (0, 0))
+    if not (player.sword.dy or player.sword.airborne or player.sword.equipped):
+        image = player.sword.draw_sword()
+        surface.blit(image, (0, 0))
 
     image = level.image
     surface.blit(image, (0, 0))
@@ -89,17 +95,24 @@ while True:
     image = level.draw_switch()
     surface.blit(image, (0, 0))
 
+    image = level.draw_goals()
+    surface.blit(image, (0, 0))
+
     image = level.draw_enemies()
     surface.blit(image, (0, 0))
 
-    image = level.draw_goals()
-    surface.blit(image, (0, 0))
+    if player.sword.dy or player.sword.airborne or player.sword.equipped:
+        image = player.sword.draw_sword()
+        surface.blit(image, (0, 0))
 
     image = player.draw_player()
     surface.blit(image, (0, 0))
 
     # Seeing if information should be displayed, and displaying it
-    if current == 1:
+    if current == 0:
+        image = info[0]
+        surface.blit(image, (50, 20))
+    elif current == 1:
         step += 1 if step != 199 else -199
         image = info[1][int(step / 20)]
         surface.blit(image, (30, 170))
@@ -110,7 +123,9 @@ while True:
 
     # Drawing transition if needed
     if transition:
-        if wait == 0:
+        if wait:
+            wait -= 1
+        else:
             transition += 1
             for x in range(30):
                 for y in range(20):
@@ -121,18 +136,14 @@ while True:
             elif transition == 75:  # Set up game (again)
                 level, player = game.start_game(level.level)
                 player.move()  # To prevent sword breaking game
-                '''DEVELOPMENT!!!'''
-                if 4 > level.level > current:
-                    current += 1
-                    step = 0
+                current = max(current, level.level)
+                step = 0
 
-        else:
-            wait -= 1
-
-    elif player.won:
+    elif all(goal.got for goal in level.goals) and level.goals:
         wait = 90
         transition = 1
         level.level += 1
+        pygame.mixer.Sound.play(win_effect)
     elif not player.alive:
         wait = 30
         transition = 1
