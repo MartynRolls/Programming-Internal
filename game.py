@@ -1,19 +1,19 @@
 import pygame
 from random import randint
 
+pygame.init()
+
 
 class Player:
     def __init__(self):
         self.sword = Sword()
         self.collision_box = pygame.Rect(0, 0, 30, 45)
         self.level_map = []
-        self.goal_list = []
         self.enemy_list = []
         self.switch_on = False
         self.airborne = False
         self.alive = True
-        self.won = False
-        self.death_details = [0, 0]
+        self.death_details = [randint(-5, 5), randint(-16, -8)]
 
         self.x, self.y = 0, 0
         self.dx, self.dy = 0, 0
@@ -24,6 +24,9 @@ class Player:
         self.sprites = []
         sheet = pygame.image.load('Sprites/Player.png')
         self.sprites = load_sheet(sheet, 10, 15, 3)
+
+        self.jump_effect = pygame.mixer.Sound("Sound Effects/Jump.mp3")
+        self.death_effect = pygame.mixer.Sound("Sound Effects/Player Death.mp3")
 
     def move(self):
         if self.alive:
@@ -38,32 +41,30 @@ class Player:
             elif not self.collision(0, 1):  # If the player should be falling, fall
                 self.airborne = True
 
-            if self.death_collision(0, 0):  # Handling a death
-                self.alive = False
-                self.death_details = [randint(-5, 5), randint(-16, -8)]
-
-            for goal in self.goal_list:
-                if self.collision_box.colliderect(goal):
-                    self.goal_list.remove(goal)
-                    if not self.goal_list:
-                        self.won = True
-
         else:  # If dead
             self.death_details[1] += 0.5  # Gravity
             self.x += self.death_details[0]
             self.y += self.death_details[1]
 
         # Handling the swords movement
-        if self.sword.airborne:  # Move the sword if it's flying
-            self.sword.move()
-        elif self.sword.equipped:  # Place the sword on the player if it's meant to be there
+        if self.sword.equipped:  # Place the sword on the player if it's meant to be there
             self.sword.x = self.x
             self.sword.y = self.y
+        else:  # Otherwise, move the sword accordingly
+            self.sword.move()
 
     def jump(self):
         if self.collision(0, 5) and not self.airborne:  # Jump if not airborne, and touching the ground
             self.airborne = True
             self.dy = -14
+
+            self.switch_on = not self.switch_on  # Switching switch blocks
+            self.sword.switch_on = self.switch_on
+            if self.collision(0, 0):  # Making sure player shouldn't die from the switch blocks
+                self.alive = False
+                pygame.mixer.Sound.play(self.death_effect)
+            else:
+                pygame.mixer.Sound.play(self.jump_effect)
 
     def fall(self):
         if self.collision(0, self.dy):  # If there is a collision, try to stop it
@@ -84,53 +85,45 @@ class Player:
         for y in range(int(self.y / 30 - 1), int(self.y / 30 + 4)):
             for x in range(int(self.x / 30), int(self.x / 30 + 2)):
                 if self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 30)):  # If collision
-                    if self.level_map[y][x] == 1:
+                    if (self.level_map[y][x] == 1 or
+                       (self.level_map[y][x] == 2 and self.y - dy + 45 < y*30) or
+                       (self.level_map[y][x] == 5 and self.switch_on) or
+                       (self.level_map[y][x] == 6 and not self.switch_on)):
                         return True
-                    if self.level_map[y][x] == 2 and self.y - dy + 45 < y*30:
-                        return True
-                    if self.level_map[y][x] == 5 and self.switch_on:
-                        return True
+
+                    # Checking for death
+                    collide = self.collision_box.colliderect(pygame.Rect(x * 30 + 12, y * 30 + 3, 24, 18))
+                    if self.level_map[y][x] == 3 and collide:
+                        self.alive = False
+                        pygame.mixer.Sound.play(self.death_effect)
 
         collide = self.collision_box.colliderect(self.sword.collision_box)  # Checking collision with sword
         if collide and self.y - dy + 45 < self.sword.y:
             return True
 
-        return False
-
-    def death_collision(self, dx, dy):
-        self.collision_box.topleft = self.x + dx, self.y + dy
-        y = self.y // 30 + 1
-        for x in range(int(self.x / 30), int(self.x / 30 + 2)):
-            collide = self.collision_box.colliderect(pygame.Rect(x * 30 + 12, y * 30 + 3, 24, 18))
-            if self.level_map[y][x] == 3 and collide:
-                return True
-
+        # Checking for death
         for enemy in self.enemy_list:
             if self.collision_box.colliderect(enemy):
-                return True
+                self.alive = False
+                pygame.mixer.Sound.play(self.death_effect)
 
         return False
 
     def draw_player(self):
         surface = pygame.Surface((300, 200), pygame.SRCALPHA)
 
-        if self.sword.equipped:  # Make the sword face the right way
-            if self.dx < 0:
-                self.sword.facing_left = True
-            elif self.dx > 0:
-                self.sword.facing_left = False
-
         if self.dx < 0:  # Make the player face the correct way
             self.facing_left = True
         elif self.dx > 0:
             self.facing_left = False
 
-        if self.dx != 0 and self.dy == 0:  # Move to the next part of the players animation
-            self.step += 1
-        if self.step > 14:
-            self.step = 0
+        if self.sword.equipped:  # Make the sword face the right way
+            self.sword.facing_left = self.facing_left
 
-        if self.dx != 0 and self.dy == 0 and self.alive:  # Fetch the correct sprite for the player
+        if self.dx != 0 and self.dy == 0:  # Move to the next part of the players animation
+            self.step += 1 if self.step < 14 else -14
+
+            # Fetch the correct sprite for the player
             if self.step > 7:
                 sprite = self.sprites[1]
             else:
@@ -151,12 +144,14 @@ class Sword:
     def __init__(self):
         self.equipped = True
         self.airborne = False
+        self.dy = 0
         self.level_map = []
         self.sprite = [pygame.image.load('Sprites/Sword.png'), pygame.image.load('Sprites/FlyingSword.png')]
         self.collision_box = pygame.Rect(0, 0, 45, 9)
         self.x = 0
         self.y = 0
         self.facing_left = False
+        self.switch_on = False
 
     def throw(self):
         if self.equipped:  # If the sword is equipped, throw it.
@@ -165,36 +160,52 @@ class Sword:
             self.y += 15
 
     def move(self):
-        self.x -= 9 if self.facing_left else -9
-        if self.collision():
-            self.airborne = False
-            while self.collision():
-                self.x += 1 if self.facing_left else -1
+        if self.airborne:  # If the sword has been thrown
+            self.x -= 9 if self.facing_left else -9
+            for _ in range(24):
+                if self.collision():
+                    self.airborne = False
+                    self.x += 1 if self.facing_left else -1
+                    
+        elif self.dy:  # If the sword should be falling
+            self.y += self.dy
+            self.dy += 1
+            self.collision_box.topleft = self.x, self.y
+            
+        else:  # If the sword is embedded in the wall
+            self.x -= 1 if self.facing_left else -1
+            if not self.collision():
+                self.dy += 1
+            self.x += 1 if self.facing_left else -1
+            if self.collision():
+                self.dy += 1
 
     def collision(self):
         self.collision_box.topleft = self.x, self.y
         y = int(self.y / 30)
         for x in range(int(self.x / 30), int(self.x / 30 + 3)):
-            if self.level_map[y][x] == 1:
-                collide = self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 30))
-                if collide:
+            if self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 30)):
+                if (self.level_map[y][x] == 1 or
+                   (self.level_map[y][x] == 5 and self.switch_on) or
+                   (self.level_map[y][x] == 6 and not self.switch_on)):
                     return True
+
             elif self.level_map[y][x] == 2:
-                collide = self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 9))
-                if collide:
+                if self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 9)):
                     return True
+
         return False
 
     def draw_sword(self):
         surface = pygame.Surface((300, 200), pygame.SRCALPHA)
-        sprite = self.sprite[0 if self.equipped else 1]
+        sprite = self.sprite[0 if self.equipped else 1]  # Find correct sprite
 
-        if self.facing_left:
+        if self.facing_left:  # Flip sprite if facing left
             sprite = pygame.transform.flip(sprite, True, False)
 
         x, y = int(self.x / 3), int(self.y / 3)
 
-        if self.equipped or self.facing_left:
+        if self.equipped or self.facing_left:  # Adjust swords position correctly
             x -= 3
         if not self.equipped:
             y -= 2
@@ -209,6 +220,7 @@ class Goal:
         self.collision_box = pygame.Rect(x, y, 30, 30)
         self.x, self.y = x, y
         self.player_location = None
+        self.enemy_list = []
         self.got = False
 
         sheet = pygame.image.load('Sprites/Goal.png')
@@ -231,6 +243,10 @@ class Goal:
 
         if self.collision_box.colliderect(self.player_location):
             self.got = True
+
+        for enemy in self.enemy_list:
+            if self.collision_box.colliderect(enemy):
+                self.got = True
 
     def draw_goal(self):
         surface = pygame.Surface((300, 200), pygame.SRCALPHA)
@@ -255,19 +271,25 @@ class Enemy:
         self.collision_box = pygame.Rect(x * 30, y * 30, 30, 30)
         self.x = x * 30
         self.y = y * 30
+        self.dy = 0
         self.facing_left = True
         self.step = 0
         self.level_map = level
+        self.switch_on = False
         self.sword_location = None
         self.alive = True
-        self.death_details = [0, 0]
+        self.death_details = [0, randint(-5, 5), randint(-16, -8)]
 
         self.animation_step = 0
         sheet = pygame.image.load('Sprites/Enemy.png')
         self.sprites = load_sheet(sheet, 10, 10, 3)
 
+        self.death_effect = pygame.mixer.Sound("Sound Effects/Enemy Death.mp3")
+
     def move(self, sword_killing):
         if self.alive:
+            self.fall()
+
             self.step += 1
             if self.step == 5:
                 self.step = 0
@@ -281,10 +303,11 @@ class Enemy:
                 if self.animation_step == 3:
                     self.animation_step = 0
 
+            self.collision_box.topleft = self.x, self.y
             collide = self.collision_box.colliderect(self.sword_location)
-            if collide and sword_killing:
+            if (collide and sword_killing) or (self.collision() and not self.dy):
                 self.alive = False
-                self.death_details = [0, randint(-5, 5), randint(-16, -8)]
+                pygame.mixer.Sound.play(self.death_effect)
 
         else:  # If dead
             self.death_details[2] += 0.5  # Gravity
@@ -292,11 +315,31 @@ class Enemy:
             self.y += self.death_details[2]
             self.collision_box.topleft = 0, 0
 
+    def fall(self):
+        self.dy += 1
+        self.y += self.dy + 28
+
+        for _ in range(self.dy):
+            y = int(self.y / 30)
+            for x in range(int(self.x / 30), int(self.x / 30 + 2)):
+                if (0 < self.level_map[y][x] < 3
+                        or (self.level_map[y][x] == 5 and self.switch_on)
+                        or (self.level_map[y][x] == 6 and not self.switch_on)):
+                    self.y -= 1
+                    self.dy = 0
+
+        self.y -= 28
+
     def collision(self):
-        self.collision_box.topleft = self.x, self.y
         y = int(self.y / 30)
         for x in range(int(self.x / 30), int(self.x / 30 + 2)):
-            if 4 > self.level_map[y][x] > 0 or self.level_map[y + 1][x] == 0:
+            if 4 > self.level_map[y][x] > 0:
+                return True
+            if self.level_map[y + 1][x] == 0:
+                return True
+            if self.level_map[y][x] == 5 and self.switch_on:
+                return True
+            if self.level_map[y][x] == 6 and not self.switch_on:
                 return True
         return False
 
@@ -372,23 +415,29 @@ class Level:
 
         for y, line in enumerate(self.level_map):
             for x, tile in enumerate(line):
-                if tile == 5:
-                    tile_number = 4  # Starting Position
-                    if y > 0 and self.level_map[y - 1][x] != 5:  # Move position up if above tile's empty
-                        tile_number -= 3
-                    if y < 19 and self.level_map[y + 1][x] != 5:  # Move down if below tile's empty
-                        tile_number += 3
-                    if x > 0 and self.level_map[y][x - 1] != 5:  # Move left if empty
-                        tile_number -= 1
-                    if x < 29 and self.level_map[y][x + 1] != 5:  # Move right if empty
-                        tile_number += 1
+                for i in range(5, 7):
+                    if tile == i:
+                        tile_number = 4  # Starting Position
+                        if y > 0 and self.level_map[y - 1][x] != i:  # Move position up if above tile's empty
+                            tile_number -= 3
+                        if y < 19 and self.level_map[y + 1][x] != i:  # Move down if below tile's empty
+                            tile_number += 3
+                        if x > 0 and self.level_map[y][x - 1] != i:  # Move left if empty
+                            tile_number -= 1
+                        if x < 29 and self.level_map[y][x + 1] != i:  # Move right if empty
+                            tile_number += 1
 
-                    if self.clear:
-                        image = self.switch_clear_tiles[int(self.step / 10)][tile_number]
-                        surface.blit(image, (x * 10, y * 10))
+                        if i == 5:
+                            if self.clear:
+                                image = self.switch_clear_tiles[int(self.step / 10)][tile_number]
+                            else:
+                                image = self.wall_tiles[tile_number]
+                        else:
+                            if not self.clear:
+                                image = self.switch_clear_tiles[3 - int(self.step / 10)][tile_number]
+                            else:
+                                image = self.wall_tiles[tile_number]
 
-                    else:
-                        image = self.wall_tiles[tile_number]
                         surface.blit(image, (x * 10, y * 10))
 
         else:
@@ -418,7 +467,7 @@ class Level:
                     self.goals.append(Goal(x * 30, y * 30 - 15))
                 elif tile == 4:
                     self.enemies.append(Enemy(x, y, self.level_map))
-                elif tile > 0 and tile != 5:
+                elif 5 > tile > 0:
                     image = self.find_tile(x, y)
                     level.blit(image, (x*10, y*10))
 
@@ -472,7 +521,5 @@ def start_game(level):
     player.x, player.y = cords
     player.level_map = level.level_map
     player.sword.level_map = level.level_map
-    for goal in level.goals:
-        player.goal_list.append(goal.collision_box)
 
     return level, player
