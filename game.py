@@ -12,6 +12,7 @@ class Player:
         self.enemy_list = []
         self.switch_on = False
         self.airborne = False
+        self.airtime = 0
         self.alive = True
         self.death_details = [randint(-5, 5), randint(-16, -8)]
 
@@ -27,6 +28,7 @@ class Player:
 
         self.jump_effect = pygame.mixer.Sound("Sound Effects/Jump.mp3")
         self.death_effect = pygame.mixer.Sound("Sound Effects/Player Death.mp3")
+        self.hit_effect = pygame.mixer.Sound("Sound Effects/Thud.mp3")
 
     def move(self):
         if self.alive:
@@ -54,25 +56,32 @@ class Player:
             self.sword.move()
 
     def jump(self):
-        if self.collision(0, 5) and not self.airborne:  # Jump if not airborne, and touching the ground
-            self.airborne = True
-            self.dy = -14
+        if ((self.collision(0, 5) and not self.airborne) or  # Jump if not airborne, and touching the ground
+                (self.airtime < 3 and self.dy > 0) or  # Or jump if player hasn't been falling for very long
+                (self.airtime < 8)):  # Or reset velocity if player hasn't been airborne very long
 
-            self.switch_on = not self.switch_on  # Switching switch blocks
-            self.sword.switch_on = self.switch_on
+            self.dy = -9  # Giving the player velocity
+
+            if not self.airborne:
+                self.airborne = True
+                self.switch_on = not self.switch_on  # Switching switch blocks
+                self.sword.switch_on = self.switch_on
+
             if self.collision(0, 0):  # Making sure player shouldn't die from the switch blocks
                 self.alive = False
-                pygame.mixer.Sound.play(self.death_effect)
-            else:
+            elif self.airtime == 0:  # Otherwise, play the jump effect
                 pygame.mixer.Sound.play(self.jump_effect)
 
     def fall(self):
+        self.airtime += 1
         if self.collision(0, self.dy):  # If there is a collision, try to stop it
+            pygame.mixer.Sound.play(self.hit_effect)
             while self.collision(0, self.dy):
                 self.y += 1 if self.dy < 0 else -1
 
             if self.dy >= 0:  # If the players landed on the floor, they're not falling anymore
                 self.airborne = False
+                self.airtime = 0
 
             self.y += self.dy
             self.dy = 0
@@ -147,6 +156,8 @@ class Sword:
         self.dy = 0
         self.level_map = []
         self.sprite = [pygame.image.load('Sprites/Sword.png'), pygame.image.load('Sprites/FlyingSword.png')]
+        self.throw_effect = pygame.mixer.Sound("Sound Effects/Throw.mp3")
+        self.hit_effect = pygame.mixer.Sound("Sound Effects/Thud.mp3")
         self.collision_box = pygame.Rect(0, 0, 45, 9)
         self.x = 0
         self.y = 0
@@ -158,10 +169,13 @@ class Sword:
             self.equipped = False
             self.airborne = True
             self.y += 15
+            pygame.mixer.Sound.play(self.throw_effect)
 
     def move(self):
         if self.airborne:  # If the sword has been thrown
             self.x -= 9 if self.facing_left else -9
+            if self.collision():
+                pygame.mixer.Sound.play(self.hit_effect)
             for _ in range(24):
                 if self.collision():
                     self.airborne = False
@@ -184,10 +198,10 @@ class Sword:
         self.collision_box.topleft = self.x, self.y
         y = int(self.y / 30)
         for x in range(int(self.x / 30), int(self.x / 30 + 3)):
-            if self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 30)):
-                if (self.level_map[y][x] == 1 or
-                   (self.level_map[y][x] == 5 and self.switch_on) or
-                   (self.level_map[y][x] == 6 and not self.switch_on)):
+            if (self.level_map[y][x] == 1 or
+               (self.level_map[y][x] == 5 and self.switch_on) or
+               (self.level_map[y][x] == 6 and not self.switch_on)):
+                if self.collision_box.colliderect(pygame.Rect(x * 30, y * 30, 30, 30)):
                     return True
 
             elif self.level_map[y][x] == 2:
@@ -288,6 +302,10 @@ class Enemy:
 
     def move(self, sword_killing):
         if self.alive:
+            if self.collision():
+                self.alive = False
+                pygame.mixer.Sound.play(self.death_effect)
+
             self.fall()
 
             self.step += 1
