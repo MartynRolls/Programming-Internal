@@ -5,7 +5,7 @@ import game
 pygame.init()
 
 # Defining Variables
-size = 5
+size = 3
 width, height = size * 300, size * 200
 screen = pygame.display.set_mode((width, height))
 clock = pygame.time.Clock()
@@ -16,13 +16,10 @@ transition_tiles = game.load_sheet(sheet, 10, 10, 32)
 transition = 0
 wait = 0
 
-info = []
-sheet = pygame.image.load('Sprites/Info/Info1.png')
-info.append(pygame.transform.scale_by(sheet, (2, 2)))
-sheet = pygame.image.load('Sprites/Info/Info2.png')
-info.append(game.load_sheet(sheet, 110, 20, 10))
-sheet = pygame.image.load('Sprites/Info/Info3.png')
-info.append(game.load_sheet(sheet, 65, 14, 6))
+info = [pygame.image.load(f'Sprites/Info/Info{i}.png') for i in range(1, 4)]  # Load Information Images
+info[0] = pygame.transform.scale_by(info[0], (2, 2))  # V  Edit Info Images Appropriately  V
+info[1] = game.load_sheet(info[1], 110, 20, 10)
+info[2] = game.load_sheet(info[2], 65, 14, 6)
 step = 0
 
 pygame.mixer.music.load('Sound Effects/Music.mp3')
@@ -30,7 +27,7 @@ pygame.mixer.music.play(-1)
 win_effect = pygame.mixer.Sound("Sound Effects/Win.mp3")
 
 # Setting up game
-level, player = game.start_game(0)
+level, player = game.start_game(16)
 current = level.level
 
 # Main loop
@@ -86,46 +83,33 @@ while True:
     surface = pygame.Surface((300, 200), pygame.SRCALPHA)
 
     if not (player.sword.dy or player.sword.airborne or player.sword.equipped):
-        image = player.sword.draw_sword()
-        surface.blit(image, (0, 0))
+        surface.blit(player.sword.draw_sword(), (0, 0))
 
-    image = level.image
-    surface.blit(image, (0, 0))
-
-    image = level.draw_switch()
-    surface.blit(image, (0, 0))
-
-    image = level.draw_goals()
-    surface.blit(image, (0, 0))
-
-    image = level.draw_enemies()
-    surface.blit(image, (0, 0))
+    surface.blit(level.image, (0, 0))  # Level Image
+    surface.blit(level.draw_switch(), (0, 0))  # Switch Blocks
+    surface.blit(level.draw_goals(), (0, 0))  # Goals
+    surface.blit(level.draw_enemies(), (0, 0))  # Enemies
 
     if player.sword.dy or player.sword.airborne or player.sword.equipped:
-        image = player.sword.draw_sword()
-        surface.blit(image, (0, 0))
+        surface.blit(player.sword.draw_sword(), (0, 0))
 
-    image = player.draw_player()
-    surface.blit(image, (0, 0))
+    surface.blit(player.draw_player(), (0, 0))
 
     # Seeing if information should be displayed, and displaying it
     if current == 0:
-        image = info[0]
-        surface.blit(image, (50, 20))
+        surface.blit(info[0], (50, 20))
     elif current == 1:
         step += 1 if step != 199 else -199
-        image = info[1][int(step / 20)]
-        surface.blit(image, (30, 170))
+        surface.blit(info[1][int(step / 20)], (30, 170))
     elif current == 2:
         step += 1 if step != 119 else -119
-        image = info[2][int(step / 20)]
-        surface.blit(image, (30, 170))
+        surface.blit(info[2][int(step / 20)], (30, 170))
 
     # Drawing transition if needed
     if transition:
-        if wait:
+        if wait:  # If there should be a delay, wait
             wait -= 1
-        else:
+        else:  # If no delay
             transition += 1
             for x in range(30):
                 for y in range(20):
@@ -147,6 +131,7 @@ while True:
     elif not player.alive:
         wait = 30
         transition = 1
+        pygame.mixer.Sound.play(player.death_effect)
 
     # Placing image onto screen
     surface = pygame.transform.scale_by(surface, (size, size))
