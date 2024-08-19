@@ -27,7 +27,7 @@ pygame.mixer.music.play(-1)
 win_effect = pygame.mixer.Sound("Sound Effects/Win.mp3")
 
 # Setting up game
-level, player = game.start_game(16)
+level, player = game.start_game(0)
 current = level.level
 
 # Main loop
@@ -83,7 +83,7 @@ while True:
     surface = pygame.Surface((300, 200), pygame.SRCALPHA)
 
     if not (player.sword.dy or player.sword.airborne or player.sword.equipped):
-        surface.blit(player.sword.draw_sword(), (0, 0))
+        surface.blit(player.sword.draw_sword(), (0, 0))  # Sword if in Back
 
     surface.blit(level.image, (0, 0))  # Level Image
     surface.blit(level.draw_switch(), (0, 0))  # Switch Blocks
@@ -91,7 +91,7 @@ while True:
     surface.blit(level.draw_enemies(), (0, 0))  # Enemies
 
     if player.sword.dy or player.sword.airborne or player.sword.equipped:
-        surface.blit(player.sword.draw_sword(), (0, 0))
+        surface.blit(player.sword.draw_sword(), (0, 0))  # Sword if in Front
 
     surface.blit(player.draw_player(), (0, 0))
 
@@ -123,12 +123,12 @@ while True:
                 current = max(current, level.level)
                 step = 0
 
-    elif all(goal.got for goal in level.goals) and level.goals:
+    elif all(goal.got for goal in level.goals) and level.goals:  # If all goals have been collected
         wait = 90
         transition = 1
         level.level += 1
         pygame.mixer.Sound.play(win_effect)
-    elif not player.alive:
+    elif not player.alive:  # If player has died
         wait = 30
         transition = 1
         pygame.mixer.Sound.play(player.death_effect)
